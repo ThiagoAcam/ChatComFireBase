@@ -9,4 +9,5 @@
     <string name="no_email_no_pic">Digite o e-mail</string>
     <string name="cant_take_pic">Não é possível tirar foto</string>
     <string name="no_pic">Não foi tirada foto</string>
+    <string name="no_location_yeat">Seu smartphone ainda não informou sua localização</string>
 </resources>

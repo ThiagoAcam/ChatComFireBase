@@ -3,27 +3,35 @@ package com.example.chatcomfirebase;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatImageView;
 import androidx.core.app.ActivityCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import android.Manifest;
+import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.view.LayoutInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.PopupMenu;
 import android.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -41,6 +49,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.storage.FirebaseStorage;
 import com.google.firebase.storage.StorageReference;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -63,15 +72,64 @@ public class ChatActivity extends AppCompatActivity {
     private LocationManager locationManager;
     private LocationListener locationListener;
     private static final int REQUEST_PERMISSION_GPS = 1001;
-    private ImageButton sendLocationImageButton;
+    private ImageButton menuImageButton;
+    private static final int REQ_CODE_CAMERA = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_chat);
 
-        sendLocationImageButton = findViewById(R.id.sendLocationImageButton);
-        sendLocationImageButton.setEnabled(false);
+        menuImageButton = findViewById(R.id.menuImageButton);
+
+        menuImageButton.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View v) {
+                //Creating the instance of PopupMenu
+                PopupMenu popup = new PopupMenu(ChatActivity.this, menuImageButton);
+                //Inflating the Popup using xml file
+                popup.getMenuInflater().inflate(R.menu.popup_menu, popup.getMenu());
+
+                //registering popup with OnMenuItemClickListener
+                popup.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                    public boolean onMenuItemClick(MenuItem item) {
+                        switch (item.getItemId()){
+                            case R.id.gpsItem:
+                                if(CurrentLocation == null){
+                                    Toast.makeText(ChatActivity.this,R.string.no_location_yeat, Toast.LENGTH_SHORT).show();
+                                    break;
+                                }
+
+                                String mensagem = String.format(
+                                        "geo:%f,%f",
+                                        CurrentLocation.getLatitude(),
+                                        CurrentLocation.getLongitude()
+                                );
+                                Mensagem m = new Mensagem (mensagem, new Date(), firebaseUser.getEmail(), true, false);
+
+                                collMensagensReference.add(m);
+                            break;
+                            case R.id.fotoItem:
+                                Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+
+                                if(intent.resolveActivity(getPackageManager()) != null){
+                                    startActivityForResult(intent, REQ_CODE_CAMERA);
+                                }
+                                else{
+                                    Toast.makeText(ChatActivity.this, getString(R.string.cant_take_pic), Toast.LENGTH_SHORT).show();
+                                }
+
+                                break;
+                        }
+
+                        return true;
+                    }
+                });
+
+                popup.show();
+            }
+        });
 
         mensagemEditText = findViewById(R.id.mensagemEditText);
 
@@ -94,8 +152,6 @@ public class ChatActivity extends AppCompatActivity {
                     public void onLocationChanged(Location location) {
                         if(location == null)
                             return;
-
-                        sendLocationImageButton.setEnabled(true);
 
                         CurrentLocation = location;
                     }
@@ -203,21 +259,10 @@ public class ChatActivity extends AppCompatActivity {
 
     public void enviarMensagem(View view) {
         String mensagem = mensagemEditText.getText().toString();
-        Mensagem m = new Mensagem (mensagem, new Date(), firebaseUser.getEmail(), false);
+        Mensagem m = new Mensagem (mensagem, new Date(), firebaseUser.getEmail(), false, false);
         esconderTeclado(view);
 
         mensagemEditText.setText("");
-
-        collMensagensReference.add(m);
-    }
-
-    public void enviarLocalizacao(View view) {
-        String mensagem = String.format(
-                "geo:%f,%f",
-                CurrentLocation.getLatitude(),
-                CurrentLocation.getLongitude()
-        );
-        Mensagem m = new Mensagem (mensagem, new Date(), firebaseUser.getEmail(), true);
 
         collMensagensReference.add(m);
     }
@@ -227,6 +272,43 @@ public class ChatActivity extends AppCompatActivity {
         ims.hideSoftInputFromWindow(v.getWindowToken(), 0);
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        switch (requestCode){
+            case REQ_CODE_CAMERA:
+                if(resultCode != RESULT_OK){
+                    Toast.makeText(this, getString(R.string.no_pic), Toast.LENGTH_SHORT).show();
+                    return;
+                }
+
+                Bitmap picture = (Bitmap)data.getExtras().get("data");
+                Date date = new Date();
+
+                String mensagem = DateHelper.format(date).replace("/", "-") + ".jpg";
+                Mensagem m = new Mensagem (mensagem, date, firebaseUser.getEmail(), false, true);
+
+                StorageReference pictureStorageReference = FirebaseStorage.getInstance()
+                        .getReference(
+                                String.format(
+                                        Locale.getDefault(),
+                                        "mensagens/%s/%s",
+                                        m.getEmail().replace("@", ""),
+                                        m.getTexto()));
+
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                picture.compress(Bitmap.CompressFormat.JPEG, 100, baos);
+                byte[] bytes = baos.toByteArray();
+
+                pictureStorageReference.putBytes(bytes);
+
+                collMensagensReference.add(m);
+
+                break;
+        }
+
+    }
 }
 
 class ChatViewHolder extends RecyclerView.ViewHolder {
@@ -234,6 +316,7 @@ class ChatViewHolder extends RecyclerView.ViewHolder {
     public TextView mensagemTextView;
     public ImageButton vaiProMapsImageButton;
     public ImageView profilePicImageView;
+    public ImageView ccompartilhadaImageView;
 
     ChatViewHolder(View raiz) {
         super(raiz);
@@ -241,6 +324,7 @@ class ChatViewHolder extends RecyclerView.ViewHolder {
         this.mensagemTextView = raiz.findViewById(R.id.mensagemTextView);
         this.vaiProMapsImageButton = raiz.findViewById(R.id.vaiProMapsImageButton);
         this.profilePicImageView = raiz.findViewById(R.id.profilePicImageView);
+        this.ccompartilhadaImageView = raiz.findViewById(R.id.ccompartilhadaImageView);
     }
 }
 
@@ -274,7 +358,7 @@ class ChatAdapter extends RecyclerView.Adapter<ChatViewHolder>{
 
         if(mensagem.getDadosGPS())
         {
-            holder.vaiProMapsImageButton.setTag(mensagem.getTexto());
+            holder.vaiProMapsImageButton.setTag(mensagem.getTexto().toLowerCase());
             holder.vaiProMapsImageButton.setOnClickListener((v) ->{
                 Uri uri =
                         Uri.parse(v.getTag().toString());
@@ -289,13 +373,66 @@ class ChatAdapter extends RecyclerView.Adapter<ChatViewHolder>{
             });
 
 
-            holder.vaiProMapsImageButton.setVisibility(View.VISIBLE);
-            holder.mensagemTextView.setVisibility(View.INVISIBLE);
+            controlaElementos(holder, false, false, true);
+        }
+        else if(mensagem.getIsImage())
+        {
+            holder.vaiProMapsImageButton.setTag(mensagem.getTexto().toLowerCase());
+
+            StorageReference pictureStorageReference = FirebaseStorage.getInstance()
+                    .getReference(
+                            String.format(
+                                    Locale.getDefault(),
+                                    "mensagens/%s/%s",
+                                    mensagem.getEmail().replace("@", ""),
+                                    mensagem.getTexto()));
+
+            pictureStorageReference.getDownloadUrl()
+                    .addOnSuccessListener((result) -> {
+
+                        Glide.with(context).
+                                asBitmap().addListener(new RequestListener<Bitmap>() {
+                            @Override
+                            public boolean onLoadFailed(@Nullable GlideException e, Object model, Target<Bitmap> target, boolean isFirstResource) {
+                                return false;
+                            }
+
+                            @Override
+                            public boolean onResourceReady(Bitmap resource, Object model, Target<Bitmap> target, DataSource dataSource, boolean isFirstResource) {
+                                holder.ccompartilhadaImageView.setImageBitmap(resource);
+
+                                holder.ccompartilhadaImageView.setOnClickListener(v ->{
+                                    Intent intent = new Intent(context, FullImageActivity.class);
+                                    Drawable figura = ((AppCompatImageView) v).getDrawable();
+
+                                    Bitmap bitmap = ((BitmapDrawable)figura).getBitmap();
+                                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
+                                    byte[] b = baos.toByteArray();
+
+                                    intent.putExtra("figura", b);
+                                    context.startActivity(intent);
+
+                                });
+
+                                return true;
+                            }
+                        }).
+                                load(pictureStorageReference).
+                                into(holder.ccompartilhadaImageView);
+
+                    })
+                    .addOnFailureListener((exception) -> {
+
+                        holder.ccompartilhadaImageView.setImageResource(R.drawable.ic_person_black_50dp);
+
+                    });
+
+            controlaElementos(holder, false, true, false );
         }
         else{
             holder.mensagemTextView.setText(mensagem.getTexto());
-            holder.vaiProMapsImageButton.setVisibility(View.INVISIBLE);
-            holder.mensagemTextView.setVisibility(View.VISIBLE);
+            controlaElementos(holder, true, false, false );
         }
 
         if(fotos.containsKey(mensagem.getEmail()))
@@ -343,4 +480,27 @@ class ChatAdapter extends RecyclerView.Adapter<ChatViewHolder>{
     public int getItemCount() {
         return mensagemList.size();
     }
+
+    private void controlaElementos(ChatViewHolder holder, boolean text, boolean image, boolean gps){
+
+        if(text){
+            holder.vaiProMapsImageButton.setVisibility(View.INVISIBLE);
+            holder.ccompartilhadaImageView.setVisibility(View.INVISIBLE);
+            holder.mensagemTextView.setVisibility(View.VISIBLE);
+        }
+
+        if(image){
+            holder.vaiProMapsImageButton.setVisibility(View.INVISIBLE);
+            holder.ccompartilhadaImageView.setVisibility(View.VISIBLE);
+            holder.mensagemTextView.setVisibility(View.INVISIBLE);
+        }
+
+        if(gps){
+            holder.vaiProMapsImageButton.setVisibility(View.VISIBLE);
+            holder.ccompartilhadaImageView.setVisibility(View.INVISIBLE);
+            holder.mensagemTextView.setVisibility(View.INVISIBLE);
+        }
+
+    }
+
 }

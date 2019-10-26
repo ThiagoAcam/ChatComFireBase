@@ -5,7 +5,10 @@ android:layout_height="wrap_content"
 xmlns:app="http://schemas.android.com/apk/res-auto"
 android:layout_margin="8dp"
 app:cardCornerRadius="4dp"
-android:elevation="4dp">
+android:elevation="4dp"
+app:layout_constrainedHeight="true"
+app:layout_constraintHeight_default="wrap"
+    >
 <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -29,6 +32,8 @@ android:elevation="4dp">
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="fill_horizontal"
+            android:layout_row="0"
+            android:layout_column="0"
             />
         <TextView
             android:id="@+id/mensagemTextView"
@@ -37,6 +42,8 @@ android:elevation="4dp">
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="fill_horizontal"
+            android:layout_row="1"
+            android:layout_column="0"
             />
 
         <ImageButton
@@ -46,6 +53,19 @@ android:elevation="4dp">
             android:layout_gravity="center"
             android:padding="12dp"
             android:src="@android:drawable/ic_menu_mapmode"
+            android:layout_row="1"
+            android:layout_column="0"
+            />
+
+        <ImageView
+            android:id="@+id/ccompartilhadaImageView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_person_black_50dp"
+            android:layout_row="1"
+            android:layout_column="0"
+            android:scaleType="fitCenter"
             />
     </GridLayout>
 </LinearLayout>
